@@ -3,12 +3,8 @@ import axios from "axios";
 
 const app = express();
 
-app.get("/", (req, res) => {
-  res.send("ok");
-});
-
+app.get("/", (req, res) => res.send("ok"));
 app.use(express.json({ limit: "1mb" }));
-
 
 const RELAY_SECRET = process.env.RELAY_SECRET || "CHANGE_ME";
 
@@ -19,12 +15,12 @@ app.get("/health", (req, res) => {
 app.post("/execute", async (req, res) => {
   const auth = req.headers.authorization || "";
   if (auth !== `Bearer ${RELAY_SECRET}`) {
-    return res.status(401).json({ ok: false, err: "UNAUTHORIZED" });
+    return res.status(401).json({ ok: false, status: 401, text: "UNAUTHORIZED" });
   }
 
   const { url, method, headers, body } = req.body || {};
   if (!url || !method) {
-    return res.json({ ok: false, err: "BAD_REQUEST" });
+    return res.status(400).json({ ok: false, status: 400, text: "BAD_REQUEST" });
   }
 
   try {
@@ -32,18 +28,26 @@ app.post("/execute", async (req, res) => {
       url,
       method,
       headers,
+      // body از ورکر ممکنه string باشه یا object؛ همین‌طور پاس بده
       data: body,
-      timeout: 15000,
+      timeout: 20000,
       validateStatus: () => true,
+
+      // خیلی مهم: پاسخ را خام نگه دار تا axios خودش JSON parse نکند
+      responseType: "text",
+      transformResponse: [(d) => d],
     });
 
-    res.json({
+    const text = typeof r.data === "string" ? r.data : JSON.stringify(r.data ?? "");
+
+    return res.json({
       ok: r.status >= 200 && r.status < 300,
       status: r.status,
-      data: r.data,
+      text,                 // ✅ همینی که ورکر می‌خواهد
+      headers: r.headers,   // اختیاری (برای دیباگ عالیه)
     });
   } catch (e) {
-    res.json({ ok: false, err: String(e.message || e) });
+    return res.json({ ok: false, status: 0, text: String(e?.message || e) });
   }
 });
 
