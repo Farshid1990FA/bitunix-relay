@@ -2,7 +2,13 @@ import express from "express";
 import axios from "axios";
 
 const app = express();
+
+app.get("/", (req, res) => {
+  res.send("ok");
+});
+
 app.use(express.json({ limit: "1mb" }));
+
 
 const RELAY_SECRET = process.env.RELAY_SECRET || "CHANGE_ME";
 
