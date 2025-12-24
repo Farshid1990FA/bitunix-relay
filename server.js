@@ -15,12 +15,16 @@ app.get("/health", (req, res) => {
 app.post("/execute", async (req, res) => {
   const auth = req.headers.authorization || "";
   if (auth !== `Bearer ${RELAY_SECRET}`) {
-    return res.status(401).json({ ok: false, status: 401, text: "UNAUTHORIZED" });
+    return res
+      .status(401)
+      .json({ ok: false, status: 401, text: "UNAUTHORIZED" });
   }
 
   const { url, method, headers, body } = req.body || {};
   if (!url || !method) {
-    return res.status(400).json({ ok: false, status: 400, text: "BAD_REQUEST" });
+    return res
+      .status(400)
+      .json({ ok: false, status: 400, text: "BAD_REQUEST" });
   }
 
   try {
@@ -28,26 +32,43 @@ app.post("/execute", async (req, res) => {
       url,
       method,
       headers,
-      // body از ورکر ممکنه string باشه یا object؛ همین‌طور پاس بده
       data: body,
       timeout: 20000,
       validateStatus: () => true,
 
-      // خیلی مهم: پاسخ را خام نگه دار تا axios خودش JSON parse نکند
+      // ✅ خام نگه‌داشتن پاسخ (حتی اگر JSON باشه)
       responseType: "text",
       transformResponse: [(d) => d],
+      // بعضی endpointها gzip/br میدن؛ axios خودش هندل می‌کنه، این فقط برای صراحت:
+      decompress: true,
     });
 
-    const text = typeof r.data === "string" ? r.data : JSON.stringify(r.data ?? "");
+    const text =
+      typeof r.data === "string" ? r.data : JSON.stringify(r.data ?? "");
+
+    // ✅ اگر JSON بود، یک نسخه parse شده هم بده تا ورکر راحت‌تر باشد
+    let data = null;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = null;
+    }
 
     return res.json({
       ok: r.status >= 200 && r.status < 300,
       status: r.status,
-      text,                 // ✅ همینی که ورکر می‌خواهد
-      headers: r.headers,   // اختیاری (برای دیباگ عالیه)
+      text,       // ✅ همیشه هست (ورکر می‌تواند JSON.parse کند)
+      data,       // ✅ اگر قابل parse بود: آبجکت/آرایه
+      headers: r.headers, // اختیاری (برای دیباگ)
     });
   } catch (e) {
-    return res.json({ ok: false, status: 0, text: String(e?.message || e) });
+    return res.json({
+      ok: false,
+      status: 0,
+      text: String(e?.message || e),
+      data: null,
+      headers: null,
+    });
   }
 });
 
